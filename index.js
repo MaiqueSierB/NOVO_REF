@@ -2,8 +2,7 @@ import http from 'node:http';
 import {
     Client, Events, GatewayIntentBits, REST, Routes, SlashCommandBuilder,
     EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder,
-    ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags, PermissionFlagsBits,
-    ContextMenuCommandBuilder, ApplicationCommandType, AttachmentBuilder
+    ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags
 } from 'discord.js';
 import config from './config.js';
 import * as bolao from './bolao.js';
@@ -12,9 +11,6 @@ import * as zap from './zap.js';
 import * as aovivo from './aovivo.js';
 import { rodarMonitor, textoStatus } from './monitor.js';
 import { identificarTime, listaTimes } from './times.js';
-import { tratarSorteio } from './roleta.js';
-import * as grupo from './comunidade.js';
-import * as imagens from './imagens.js';
 
 const COR = 0x1f8b4c;
 const fuso = 'America/Sao_Paulo';
@@ -49,27 +45,6 @@ const comandos = [
         .addStringOption(o => o.setName('time').setDescription('Seu time (ou "nenhum" para parar os avisos)').setRequired(true).setAutocomplete(true)),
     new SlashCommandBuilder().setName('status').setDescription('Mostra se os bots do Regresso estão no ar.'),
     new SlashCommandBuilder().setName('zap').setDescription('Gera um código para ligar seu WhatsApp ao Discord (notas e bolão pelo Zap).'),
-    new SlashCommandBuilder().setName('sorteio').setDescription('Roleta de eliminação: vai riscando opções até sobrar a vencedora.')
-        .addStringOption(o => o.setName('opcoes').setDescription('Opções separadas por vírgula (de 2 a 30)').setRequired(true).setMaxLength(1500)),
-    new SlashCommandBuilder().setName('enquete').setDescription('Cria uma enquete (votação) no canal.')
-        .addStringOption(o => o.setName('pergunta').setDescription('A pergunta').setRequired(true).setMaxLength(300))
-        .addStringOption(o => o.setName('opcoes').setDescription('Opções separadas por | ou vírgula (de 2 a 10)').setRequired(true).setMaxLength(600))
-        .addBooleanOption(o => o.setName('multipla').setDescription('Pode marcar mais de uma?'))
-        .addIntegerOption(o => o.setName('horas').setDescription('Quanto tempo fica aberta (padrão 24h)').setMinValue(1).setMaxValue(168)),
-    new SlashCommandBuilder().setName('lembrar').setDescription('Marca um lembrete: o bot te chama aqui na hora.')
-        .addStringOption(o => o.setName('lembrete').setDescription('<quando> <o quê> — ex.: amanhã 20h <compromisso>, sexta 20h30 ..., 30min ...').setRequired(true).setMaxLength(250)),
-    new SlashCommandBuilder().setName('lembretes').setDescription('Seus lembretes marcados.'),
-    new SlashCommandBuilder().setName('cancelarlembrete').setDescription('Cancela um lembrete seu.')
-        .addIntegerOption(o => o.setName('numero').setDescription('Número do lembrete (veja em /lembretes)').setRequired(true).setMinValue(1)),
-    new SlashCommandBuilder().setName('gratis').setDescription('Jogos de graça na Epic Games agora.'),
-    new SlashCommandBuilder().setName('avisos').setDescription('Usa este canal para jogos grátis e a retrospectiva semanal (admin).')
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
-    new SlashCommandBuilder().setName('meme').setDescription('Coloca uma frase numa foto, estilo meme.')
-        .addAttachmentOption(o => o.setName('imagem').setDescription('A foto').setRequired(true))
-        .addStringOption(o => o.setName('texto').setDescription('A frase').setRequired(true).setMaxLength(200))
-        .addStringOption(o => o.setName('posicao').setDescription('Onde vai a frase (padrão: embaixo)')
-            .addChoices({ name: 'embaixo', value: 'baixo' }, { name: 'em cima', value: 'cima' })),
-    new ContextMenuCommandBuilder().setName('Print').setType(ApplicationCommandType.Message),
     new SlashCommandBuilder().setName('wrapped').setDescription('Regresso Wrapped: a retrospectiva do ano (sua ou de outra pessoa).')
         .addUserOption(o => o.setName('pessoa').setDescription('De quem (padrão: você)'))
         .addBooleanOption(o => o.setName('grupo').setDescription('Mostrar a do grupo inteiro'))
@@ -88,7 +63,9 @@ async function registrarComandos() {
     // Proteção: se o token for de outro bot (com comandos que não são do bolão), não sobrescreve nada.
     const existentes = await rest.get(rota);
     const nossos = new Set(comandos.map(c => c.name));
-    const alheios = existentes.filter(c => !nossos.has(c.name));
+    // Comandos que já foram do bolão e mudaram para o Anti Janja (21/11/2026): podem ser apagados daqui
+    const mudaram = new Set(['sorteio', 'enquete', 'meme', 'Print', 'lembrar', 'lembretes', 'cancelarlembrete', 'gratis', 'avisos']);
+    const alheios = existentes.filter(c => !nossos.has(c.name) && !mudaram.has(c.name));
     if (alheios.length) {
         throw new Error(`este token parece ser de outro bot (comandos: ${alheios.map(c => '/' + c.name).join(', ')}). ` +
             'Use o token e o CLIENT_ID do bot do bolão no .bolao.env.');
@@ -197,19 +174,6 @@ client.on(Events.InteractionCreate, async interaction => {
             })));
         }
 
-        if (interaction.isMessageContextMenuCommand() && interaction.commandName === 'Print') {
-            const m = interaction.targetMessage;
-            if (!m.content?.trim()) return interaction.reply({ ...efemero, content: 'Essa mensagem não tem texto pra virar print.' });
-            await interaction.deferReply();
-            const cor = m.member?.displayHexColor && m.member.displayHexColor !== '#000000' ? m.member.displayHexColor : '#f0b232';
-            const imagem = await imagens.print({
-                nome: m.member?.displayName ?? m.author.displayName ?? m.author.username, cor,
-                avatarUrl: (m.member ?? m.author).displayAvatarURL({ extension: 'png', size: 256 }),
-                texto: m.cleanContent, quando: m.createdAt
-            });
-            return interaction.editReply({ files: [new AttachmentBuilder(imagem, { name: 'print.png' })] });
-        }
-
         if (interaction.isChatInputCommand()) {
             const rodadaOpt = interaction.options.getInteger('rodada');
             switch (interaction.commandName) {
@@ -263,47 +227,6 @@ client.on(Events.InteractionCreate, async interaction => {
                     aovivo.definirTime(interaction.user.id, time);
                     return interaction.reply({ ...efemero, content: `✅ Time do coração: **${time.nome}**. Você vai receber no privado os gols e o fim dos jogos dele (e, se vinculou o Zap, vai ser marcado no grupo).` });
                 }
-                case 'sorteio':
-                    return tratarSorteio(interaction);
-                case 'meme': {
-                    const anexo = interaction.options.getAttachment('imagem');
-                    if (!anexo.contentType?.startsWith('image/')) return interaction.reply({ ...efemero, content: 'Manda uma imagem (foto, print ou GIF).' });
-                    if (anexo.size > 10 * 1024 * 1024) return interaction.reply({ ...efemero, content: 'Imagem grande demais (máx. 10 MB).' });
-                    await interaction.deferReply();
-                    const imagem = await imagens.meme(anexo.url, interaction.options.getString('texto'), interaction.options.getString('posicao') === 'cima');
-                    return interaction.editReply({ files: [new AttachmentBuilder(imagem, { name: 'meme.jpg' })] });
-                }
-                case 'enquete': {
-                    const respostas = [...new Set(interaction.options.getString('opcoes').split(/[|,\n]+/).map(o => o.trim().slice(0, 55)).filter(Boolean))];
-                    if (respostas.length < 2 || respostas.length > 10) {
-                        return interaction.reply({ ...efemero, content: 'A enquete precisa de 2 a 10 opções, separadas por | ou vírgula.' });
-                    }
-                    const poll = {
-                        question: { text: interaction.options.getString('pergunta') },
-                        answers: respostas.map(text => ({ text })),
-                        duration: interaction.options.getInteger('horas') ?? 24,
-                        allowMultiselect: interaction.options.getBoolean('multipla') ?? false
-                    };
-                    return interaction.reply({ poll });
-                }
-                case 'lembrar': {
-                    const r = grupo.lembrar(interaction.options.getString('lembrete'), interaction.user.id, interaction.channelId);
-                    return interaction.reply({ ...(r.ok ? {} : efemero), content: r.texto, allowedMentions: { parse: [] } });
-                }
-                case 'lembretes':
-                    return interaction.reply({ ...efemero, content: grupo.listarLembretes(interaction.user.id) });
-                case 'cancelarlembrete':
-                    return interaction.reply({ ...efemero, content: grupo.cancelarLembrete(interaction.options.getInteger('numero'), interaction.user.id) });
-                case 'gratis': {
-                    await interaction.deferReply();
-                    const jogos = await grupo.buscarGratis().catch(() => null);
-                    if (!jogos) return interaction.editReply('Não consegui falar com a Epic agora. Tenta daqui a pouco.');
-                    if (!jogos.length) return interaction.editReply('Nenhum jogo de graça na Epic neste momento.');
-                    return interaction.editReply({ embeds: jogos.slice(0, 5).map(grupo.embedGratis) });
-                }
-                case 'avisos':
-                    grupo.definirCanalAvisos(interaction.channelId);
-                    return interaction.reply({ content: '📣 Pronto: jogos grátis da Epic e a retrospectiva de domingo (20h) vão sair neste canal.' });
                 case 'wrapped': {
                     // As páginas e imagens são servidas pelo app do Zap, que lê todos os bancos
                     const base = process.env.WRAPPED_URL || 'https://zap.mrbnexus.com.br';
@@ -454,14 +377,6 @@ client.once(Events.ClientReady, async c => {
     const monitorar = () => rodarMonitor(avisarAdmin).catch(e => console.error('Monitor:', e.message));
     monitorar();
     setInterval(monitorar, 5 * 60_000);
-    // Lembretes (20 s) e avisos do grupo: jogos grátis e retrospectiva semanal (30 min)
-    setInterval(() => grupo.enviarLembretes(client).catch(e => console.error('Lembretes:', e.message)), 20_000);
-    const avisos = () => {
-        grupo.verificarEpic(client).catch(e => console.error('Jogos grátis:', e.message));
-        grupo.verificarRetro(client).catch(e => console.error('Retrospectiva:', e.message));
-    };
-    avisos();
-    setInterval(avisos, 30 * 60_000);
 });
 
 // Servidor HTTP mínimo: a hospedagem precisa de uma porta respondendo.
