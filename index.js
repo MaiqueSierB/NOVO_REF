@@ -30,6 +30,8 @@ const comandos = [
         .addStringOption(o => o.setName('jogo').setDescription('Comece a digitar o nome de um time').setRequired(true).setAutocomplete(true))
         .addIntegerOption(o => o.setName('casa').setDescription('Gols do mandante').setRequired(true).setMinValue(0).setMaxValue(20))
         .addIntegerOption(o => o.setName('fora').setDescription('Gols do visitante').setRequired(true).setMinValue(0).setMaxValue(20)),
+    new SlashCommandBuilder().setName('apagarpalpite').setDescription('Apaga um palpite seu (só antes do jogo começar).')
+        .addStringOption(o => o.setName('jogo').setDescription('Jogo do palpite').setRequired(true).setAutocomplete(true)),
     new SlashCommandBuilder().setName('meuspalpites').setDescription('Mostra seus palpites e pontos numa rodada.')
         .addIntegerOption(o => o.setName('rodada').setDescription('Número da rodada (padrão: rodada atual)').setMinValue(1).setMaxValue(38)),
     new SlashCommandBuilder().setName('ranking').setDescription('Ranking do bolão (geral ou de uma rodada).')
@@ -70,14 +72,15 @@ function embedRodada(rodada, userId) {
     const jogos = bolao.palpitesDoUsuarioNaRodada(userId, rodada);
     if (!jogos.length) return new EmbedBuilder().setColor(COR).setDescription(`Não encontrei jogos da rodada ${rodada}.`);
     const linhas = jogos.map(j => {
-        const meu = j.p_casa != null ? ` · seu palpite: ${j.p_casa}x${j.p_fora}${j.pontos != null ? ` (**${j.pontos} pts**)` : ''}` : '';
+        const via = j.origem === 'zap' ? ' 📱' : '';
+        const meu = j.p_casa != null ? ` · seu palpite: ${j.p_casa}x${j.p_fora}${via}${j.pontos != null ? ` (**${j.pontos} pts**)` : ''}` : '';
         const estado = j.status === 'FINISHED' ? '✅' : ['IN_PLAY', 'PAUSED'].includes(j.status) ? '🔴' :
             ['POSTPONED', 'SUSPENDED', 'CANCELLED'].includes(j.status) ? '⏸️' : (bolao.aberto(j) ? '🟢' : '🔒');
         return `${estado} ${placar(j)} — ${ts(j.data_utc)}${meu}`;
     });
     return new EmbedBuilder().setColor(COR).setTitle(`⚽ Brasileirão — Rodada ${rodada}`)
         .setDescription(linhas.join('\n'))
-        .setFooter({ text: '🟢 aberto pra palpite · 🔒 fechado · 🔴 ao vivo · ✅ encerrado · /palpitar para palpitar' });
+        .setFooter({ text: '🟢 aberto · 🔒 fechado · 🔴 ao vivo · ✅ encerrado · 📱 palpite feito pelo Zap · /palpitar · /apagarpalpite' });
 }
 
 function embedRanking(rodada = null) {
@@ -149,6 +152,13 @@ client.on(Events.InteractionCreate, async interaction => {
             return interaction.respond(opcoes.map(x => ({ name: x.nome, value: x.key })));
         }
 
+        if (interaction.isAutocomplete() && interaction.commandName === 'apagarpalpite') {
+            return interaction.respond(bolao.palpitesAbertos(interaction.user.id).map(j => ({
+                name: `${j.casa} ${j.p_casa} x ${j.p_fora} ${j.fora} — ${fmtData(j.data_utc)}`.slice(0, 100),
+                value: String(j.id)
+            })));
+        }
+
         if (interaction.isAutocomplete() && interaction.commandName === 'palpite') {
             const texto = interaction.options.getFocused();
             return interaction.respond(bolao.jogosAbertos(25, texto).map(j => ({
@@ -173,6 +183,10 @@ client.on(Events.InteractionCreate, async interaction => {
                 case 'palpite': {
                     const id = Number(interaction.options.getString('jogo'));
                     return responderPalpite(interaction, id, interaction.options.getInteger('casa'), interaction.options.getInteger('fora'));
+                }
+                case 'apagarpalpite': {
+                    const r = bolao.apagarPalpite(Number(interaction.options.getString('jogo')), interaction.user.id);
+                    return interaction.reply({ ...efemero, content: r.ok ? `🗑️ Palpite apagado: **${r.jogo.casa} x ${r.jogo.fora}**.` : `❌ ${r.motivo}` });
                 }
                 case 'meuspalpites': {
                     const rodada = rodadaOpt ?? bolao.rodadaAtual();

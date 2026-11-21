@@ -46,13 +46,31 @@ export function salvarPalpite(jogoId, user, golsCasa, golsFora) {
     if (!j) return { ok: false, motivo: 'Jogo não encontrado.' };
     if (!aberto(j)) return { ok: false, motivo: 'Esse jogo já começou ou não está aceitando palpites.' };
     db.prepare(`
-        INSERT INTO palpites (jogo_id, user_id, username, gols_casa, gols_fora, atualizado)
-        VALUES (?, ?, ?, ?, ?, datetime('now'))
+        INSERT INTO palpites (jogo_id, user_id, username, gols_casa, gols_fora, atualizado, origem)
+        VALUES (?, ?, ?, ?, ?, datetime('now'), 'discord')
         ON CONFLICT(jogo_id, user_id) DO UPDATE SET
             gols_casa = excluded.gols_casa, gols_fora = excluded.gols_fora,
-            username = excluded.username, atualizado = excluded.atualizado
+            username = excluded.username, atualizado = excluded.atualizado, origem = excluded.origem
     `).run(jogoId, user.id, user.username, golsCasa, golsFora);
     return { ok: true, jogo: j };
+}
+
+// Apaga um palpite enquanto o jogo ainda não começou
+export function apagarPalpite(jogoId, userId) {
+    const j = jogo(jogoId);
+    if (!aberto(j)) return { ok: false, motivo: 'Esse jogo já começou; o palpite não pode mais ser apagado.' };
+    const n = db.prepare('DELETE FROM palpites WHERE jogo_id = ? AND user_id = ?').run(jogoId, userId).changes;
+    return n ? { ok: true, jogo: j } : { ok: false, motivo: 'Você não tinha palpite nesse jogo.' };
+}
+
+// Palpites da pessoa em jogos que ainda não começaram (para escolher qual apagar)
+export function palpitesAbertos(userId) {
+    return db.prepare(`
+        SELECT j.*, p.gols_casa AS p_casa, p.gols_fora AS p_fora, p.origem, p.atualizado AS p_quando
+        FROM palpites p JOIN jogos j ON j.id = p.jogo_id
+        WHERE p.user_id = ? AND j.status IN ('SCHEDULED','TIMED') AND j.data_utc > ?
+        ORDER BY j.data_utc LIMIT 25
+    `).all(userId, agoraISO());
 }
 
 export function palpite(jogoId, userId) {
@@ -61,7 +79,7 @@ export function palpite(jogoId, userId) {
 
 export function palpitesDoUsuarioNaRodada(userId, rodada) {
     return db.prepare(`
-        SELECT j.*, p.gols_casa AS p_casa, p.gols_fora AS p_fora, p.pontos
+        SELECT j.*, p.gols_casa AS p_casa, p.gols_fora AS p_fora, p.pontos, p.origem
         FROM jogos j LEFT JOIN palpites p ON p.jogo_id = j.id AND p.user_id = ?
         WHERE j.temporada = ? AND j.rodada = ?
         ORDER BY j.data_utc, j.id

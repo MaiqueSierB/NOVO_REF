@@ -76,6 +76,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_palpites_user ON palpites(user_id);
 `);
 
+// Migração: de onde veio o palpite (discord | zap), para auditoria
+if (!db.prepare('PRAGMA table_info(palpites)').all().some(c => c.name === 'origem')) {
+    db.exec('ALTER TABLE palpites ADD COLUMN origem TEXT');
+}
+
 export function getEstado(chave) {
     return db.prepare('SELECT valor FROM estado WHERE chave = ?').get(chave)?.valor ?? null;
 }
