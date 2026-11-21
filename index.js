@@ -326,6 +326,14 @@ client.once(Events.ClientReady, async c => {
     await ciclo();
     setInterval(ciclo, config.syncMinutos * 60_000);
     setInterval(cicloAoVivo, 60_000);
+    // Mantém os outros bots acordados: a Hostinger só (re)sobe alguns apps quando recebem visita.
+    const URLS = (process.env.KEEPALIVE_URLS || 'https://antijanja.mrbnexus.com.br/health,https://rmdb.mrbnexus.com.br/,' +
+        'https://rgdb.mrbnexus.com.br/,https://zap.mrbnexus.com.br/,https://aniversario.mrbnexus.com.br/').split(',');
+    const acordar = () => URLS.forEach(u => fetch(u.trim(), { signal: AbortSignal.timeout(15_000) })
+        .then(r => { if (!r.ok) console.warn(`Keepalive: ${u} respondeu ${r.status}`); })
+        .catch(e => console.warn(`Keepalive: ${u} falhou (${e.message})`)));
+    acordar();
+    setInterval(acordar, 5 * 60_000);
 });
 
 // Servidor HTTP mínimo: a hospedagem precisa de uma porta respondendo.
