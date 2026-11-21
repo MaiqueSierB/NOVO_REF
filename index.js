@@ -11,6 +11,7 @@ import * as zap from './zap.js';
 import * as aovivo from './aovivo.js';
 import { rodarMonitor, textoStatus } from './monitor.js';
 import { identificarTime, listaTimes } from './times.js';
+import { tratarSorteio } from './roleta.js';
 
 const COR = 0x1f8b4c;
 const fuso = 'America/Sao_Paulo';
@@ -45,6 +46,8 @@ const comandos = [
         .addStringOption(o => o.setName('time').setDescription('Seu time (ou "nenhum" para parar os avisos)').setRequired(true).setAutocomplete(true)),
     new SlashCommandBuilder().setName('status').setDescription('Mostra se os bots do Regresso estão no ar.'),
     new SlashCommandBuilder().setName('zap').setDescription('Gera um código para ligar seu WhatsApp ao Discord (notas e bolão pelo Zap).'),
+    new SlashCommandBuilder().setName('sorteio').setDescription('Roleta de eliminação: vai riscando opções até sobrar a vencedora.')
+        .addStringOption(o => o.setName('opcoes').setDescription('Opções separadas por vírgula (de 2 a 30)').setRequired(true).setMaxLength(1500)),
     new SlashCommandBuilder().setName('wrapped').setDescription('Regresso Wrapped: a retrospectiva do ano (sua ou de outra pessoa).')
         .addUserOption(o => o.setName('pessoa').setDescription('De quem (padrão: você)'))
         .addBooleanOption(o => o.setName('grupo').setDescription('Mostrar a do grupo inteiro'))
@@ -225,6 +228,8 @@ client.on(Events.InteractionCreate, async interaction => {
                     aovivo.definirTime(interaction.user.id, time);
                     return interaction.reply({ ...efemero, content: `✅ Time do coração: **${time.nome}**. Você vai receber no privado os gols e o fim dos jogos dele (e, se vinculou o Zap, vai ser marcado no grupo).` });
                 }
+                case 'sorteio':
+                    return tratarSorteio(interaction);
                 case 'wrapped': {
                     // As páginas e imagens são servidas pelo app do Zap, que lê todos os bancos
                     const base = process.env.WRAPPED_URL || 'https://zap.mrbnexus.com.br';
