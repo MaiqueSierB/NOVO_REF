@@ -39,6 +39,14 @@ async function registrarComandos() {
     const rota = config.guildId
         ? Routes.applicationGuildCommands(config.clientId, config.guildId)
         : Routes.applicationCommands(config.clientId);
+    // Proteção: se o token for de outro bot (com comandos que não são do bolão), não sobrescreve nada.
+    const existentes = await rest.get(rota);
+    const nossos = new Set(comandos.map(c => c.name));
+    const alheios = existentes.filter(c => !nossos.has(c.name));
+    if (alheios.length) {
+        throw new Error(`este token parece ser de outro bot (comandos: ${alheios.map(c => '/' + c.name).join(', ')}). ` +
+            'Use o token e o CLIENT_ID do bot do bolão no .bolao.env.');
+    }
     await rest.put(rota, { body: comandos });
     console.log(`Comandos registrados (${config.guildId ? 'no servidor' : 'globais'}).`);
 }
@@ -230,7 +238,13 @@ async function ciclo() {
 
 client.once(Events.ClientReady, async c => {
     console.log(`⚽ Bolão online como ${c.user.tag}`);
-    await registrarComandos().catch(e => console.error('Falha ao registrar comandos:', e.message));
+    try {
+        await registrarComandos();
+    } catch (e) {
+        console.error('Bolão desligado:', e.message);
+        await client.destroy();
+        return;
+    }
     await ciclo();
     setInterval(ciclo, config.syncMinutos * 60_000);
 });
