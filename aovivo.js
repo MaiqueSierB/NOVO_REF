@@ -8,7 +8,6 @@ import { identificarTime } from './times.js';
 // brasileiro. (O bolão e a /tabela continuam só Série A.)
 const LIGAS = (process.env.LIGAS_AO_VIVO || 'bra.1,bra.2,bra.copa_do_brazil,conmebol.libertadores,conmebol.sudamericana').split(',');
 const URL = liga => `https://site.api.espn.com/apis/site/v2/sports/soccer/${liga}/scoreboard`;
-const dois = n => String(n).padStart(2, '0');
 
 function dataBR(d = new Date()) {
     const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
@@ -34,7 +33,7 @@ const num = v => {
 };
 
 // Converte um evento da ESPN no nosso formato
-export function lerEvento(ev) {
+function lerEvento(ev) {
     const comp = ev.competitions?.[0];
     const cs = comp?.competitors || [];
     const casa = cs.find(c => c.homeAway === 'home') || cs[0];
@@ -66,8 +65,8 @@ const salvar = db.prepare(`
         estado = excluded.estado, atualizado = excluded.atualizado
 `);
 
-// Compara com o último estado salvo e gera os avisos. Exportada para teste.
-export function processar(eventos) {
+// Compara com o último estado salvo e gera os avisos.
+function processar(eventos) {
     const novos = [];
     for (const e of eventos.filter(Boolean)) {
         const antes = db.prepare('SELECT * FROM ao_vivo WHERE event_id = ?').get(e.id);

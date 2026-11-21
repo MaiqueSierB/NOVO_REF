@@ -5,7 +5,7 @@ import { calcularPontos, REGRAS } from './pontos.js';
 const ABERTOS = ['SCHEDULED', 'TIMED'];
 const agoraISO = () => new Date().toISOString();
 
-export function temporadaAtual() {
+function temporadaAtual() {
     return db.prepare('SELECT MAX(temporada) AS t FROM jogos').get()?.t ?? null;
 }
 
@@ -19,11 +19,6 @@ export function rodadaAtual() {
           AND status NOT IN ('FINISHED', 'CANCELLED', 'AWARDED')
     `).get(t)?.r;
     return aberta ?? db.prepare('SELECT MAX(rodada) AS r FROM jogos WHERE temporada = ?').get(t)?.r ?? null;
-}
-
-export function jogosDaRodada(rodada) {
-    return db.prepare('SELECT * FROM jogos WHERE temporada = ? AND rodada = ? ORDER BY data_utc, id')
-        .all(temporadaAtual(), rodada);
 }
 
 export function jogo(id) {
@@ -99,7 +94,7 @@ export function pontuadoresDoJogo(jogoId) {
 }
 
 // Quem já participou do bolão alguma vez na temporada (usado nos lembretes)
-export function participantes() {
+function participantes() {
     return db.prepare(`
         SELECT DISTINCT p.user_id FROM palpites p JOIN jogos j ON j.id = p.jogo_id
         WHERE j.temporada = ?
