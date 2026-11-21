@@ -9,12 +9,14 @@ Bolão por pontos do Brasileirão Série A. Os jogos e resultados vêm da [footb
 | `/palpitar` | Abre uma lista com os próximos jogos; escolha um e digite o placar |
 | `/palpite jogo casa fora` | Palpite rápido (o campo `jogo` sugere times enquanto você digita) |
 | `/jogos [rodada]` | Jogos da rodada, com status e o seu palpite |
+| `/apagarpalpite jogo` | Apaga um palpite seu antes do jogo começar |
 | `/meuspalpites [rodada]` | Seus palpites e pontos (só você vê) |
 | `/ranking [rodada]` | Ranking geral ou de uma rodada |
 | `/regras` | Pontuação |
 | `/tabela` | Classificação da Série A |
 | `/rodada [n]` | Jogos e resultados da rodada |
 | `/meutime time` | Aviso de gol e fim de jogo do seu time no privado — qualquer time brasileiro (Série A, B, Copa do Brasil, Libertadores, Sul-Americana) |
+| `/status` | Mostra se os 6 bots estão no ar (o bolão checa todos a cada 5 min e avisa o admin no privado se algum cair) |
 | `/zap` | Gera o código para ligar seu WhatsApp (notas e bolão pelo grupo do Zap) |
 
 ## Pontuação (só Brasileirão Série A)
