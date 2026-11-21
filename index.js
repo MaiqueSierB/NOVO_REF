@@ -7,6 +7,7 @@ import {
 import config from './config.js';
 import * as bolao from './bolao.js';
 import { textoRegras } from './pontos.js';
+import * as zap from './zap.js';
 
 const COR = 0x1f8b4c;
 const fuso = 'America/Sao_Paulo';
@@ -31,7 +32,8 @@ const comandos = [
         .addIntegerOption(o => o.setName('rodada').setDescription('Número da rodada (padrão: rodada atual)').setMinValue(1).setMaxValue(38)),
     new SlashCommandBuilder().setName('ranking').setDescription('Ranking do bolão (geral ou de uma rodada).')
         .addIntegerOption(o => o.setName('rodada').setDescription('Só uma rodada (deixe vazio para o geral)').setMinValue(1).setMaxValue(38)),
-    new SlashCommandBuilder().setName('regras').setDescription('Como funciona a pontuação do bolão.')
+    new SlashCommandBuilder().setName('regras').setDescription('Como funciona a pontuação do bolão.'),
+    new SlashCommandBuilder().setName('zap').setDescription('Gera um código para ligar seu WhatsApp ao Discord (notas e bolão pelo Zap).')
 ].map(c => c.toJSON());
 
 async function registrarComandos() {
@@ -154,6 +156,13 @@ client.on(Events.InteractionCreate, async interaction => {
                 }
                 case 'ranking':
                     return interaction.reply({ embeds: [embedRanking(rodadaOpt)] });
+                case 'zap': {
+                    const codigo = zap.gerarCodigo(interaction.user.id, interaction.user.username);
+                    const ja = zap.vinculado(interaction.user.id) ? '\n(Você já tem um Zap vinculado; isso adiciona ou troca o número.)' : '';
+                    return interaction.reply({ ...efemero, content:
+                        `📱 Mande no grupo do Regresso no WhatsApp:\n\n**!vincular ${codigo}**\n\nO código vale 10 minutos. ` +
+                        `Depois disso, suas notas de filmes/jogos e palpites pelo Zap contam no seu perfil do Discord.${ja}` });
+                }
                 case 'regras':
                     return interaction.reply({ embeds: [new EmbedBuilder().setColor(COR).setTitle('📜 Regras do bolão').setDescription(textoRegras)] });
             }
