@@ -9,6 +9,7 @@ import * as bolao from './bolao.js';
 import { textoRegras } from './pontos.js';
 import * as zap from './zap.js';
 import * as aovivo from './aovivo.js';
+import { rodarMonitor, textoStatus } from './monitor.js';
 import { identificarTime, listaTimes } from './times.js';
 
 const COR = 0x1f8b4c;
@@ -42,6 +43,7 @@ const comandos = [
         .addIntegerOption(o => o.setName('numero').setDescription('Número da rodada (padrão: atual)').setMinValue(1).setMaxValue(38)),
     new SlashCommandBuilder().setName('meutime').setDescription('Escolhe seu time para receber aviso de gol e fim de jogo.')
         .addStringOption(o => o.setName('time').setDescription('Seu time (ou "nenhum" para parar os avisos)').setRequired(true).setAutocomplete(true)),
+    new SlashCommandBuilder().setName('status').setDescription('Mostra se os bots do Regresso estão no ar.'),
     new SlashCommandBuilder().setName('zap').setDescription('Gera um código para ligar seu WhatsApp ao Discord (notas e bolão pelo Zap).')
 ].map(c => c.toJSON());
 
@@ -220,6 +222,9 @@ client.on(Events.InteractionCreate, async interaction => {
                     aovivo.definirTime(interaction.user.id, time);
                     return interaction.reply({ ...efemero, content: `✅ Time do coração: **${time.nome}**. Você vai receber no privado os gols e o fim dos jogos dele (e, se vinculou o Zap, vai ser marcado no grupo).` });
                 }
+                case 'status':
+                    return interaction.reply({ embeds: [new EmbedBuilder().setColor(COR).setTitle('🤖 Status dos bots')
+                        .setDescription(`🟢 **Bolão** — ${client.user.tag} (este bot)\n${textoStatus()}`).setFooter({ text: 'Checagem a cada 5 minutos' })] });
                 case 'regras':
                     return interaction.reply({ embeds: [new EmbedBuilder().setColor(COR).setTitle('📜 Regras do bolão').setDescription(textoRegras)] });
             }
@@ -328,6 +333,14 @@ async function cicloAoVivo() {
     }
 }
 
+// Alertas vão no privado de ADMIN_DISCORD_ID ou, se não tiver, do dono do servidor.
+async function avisarAdmin(texto) {
+    const id = process.env.ADMIN_DISCORD_ID || (config.guildId && (await client.guilds.fetch(config.guildId).catch(() => null))?.ownerId);
+    const user = id && await client.users.fetch(id).catch(() => null);
+    if (user) await user.send(texto);
+    else console.warn('Monitor sem destinatário:', texto);
+}
+
 client.once(Events.ClientReady, async c => {
     console.log(`⚽ Bolão online como ${c.user.tag}`);
     try {
@@ -340,14 +353,10 @@ client.once(Events.ClientReady, async c => {
     await ciclo();
     setInterval(ciclo, config.syncMinutos * 60_000);
     setInterval(cicloAoVivo, 30_000);
-    // Mantém os outros bots acordados: a Hostinger só (re)sobe alguns apps quando recebem visita.
-    const URLS = (process.env.KEEPALIVE_URLS || 'https://antijanja.mrbnexus.com.br/health,https://rmdb.mrbnexus.com.br/,' +
-        'https://rgdb.mrbnexus.com.br/,https://zap.mrbnexus.com.br/,https://aniversario.mrbnexus.com.br/').split(',');
-    const acordar = () => URLS.forEach(u => fetch(u.trim(), { signal: AbortSignal.timeout(15_000) })
-        .then(r => { if (!r.ok) console.warn(`Keepalive: ${u} respondeu ${r.status}`); })
-        .catch(e => console.warn(`Keepalive: ${u} falhou (${e.message})`)));
-    acordar();
-    setInterval(acordar, 5 * 60_000);
+    // Monitor: visita os outros bots a cada 5 min (mantém acordados) e avisa o admin se algum cair.
+    const monitorar = () => rodarMonitor(avisarAdmin).catch(e => console.error('Monitor:', e.message));
+    monitorar();
+    setInterval(monitorar, 5 * 60_000);
 });
 
 // Servidor HTTP mínimo: a hospedagem precisa de uma porta respondendo.
