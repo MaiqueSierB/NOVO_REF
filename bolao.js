@@ -1,5 +1,5 @@
 import db, { getEstado, setEstado } from './db.js';
-import { buscarPartidas } from './futebol.js';
+import { buscarPartidas, buscarTabela } from './futebol.js';
 import { calcularPontos, REGRAS } from './pontos.js';
 
 const ABERTOS = ['SCHEDULED', 'TIMED'];
@@ -120,6 +120,21 @@ export async function sincronizar() {
     const partidas = await buscarPartidas();
     db.transaction(lista => { for (const p of lista) upsertJogo.run(p); })(partidas);
 
+    // Classificação (falha aqui não impede o resto da sincronização)
+    try {
+        const tabela = await buscarTabela();
+        if (tabela.length) {
+            db.transaction(linhas => {
+                db.prepare('DELETE FROM tabela').run();
+                const ins = db.prepare(`INSERT INTO tabela (posicao, time, jogos, vitorias, empates, derrotas, gols_pro, gols_contra, saldo, pontos)
+                    VALUES (@posicao, @time, @jogos, @vitorias, @empates, @derrotas, @gols_pro, @gols_contra, @saldo, @pontos)`);
+                for (const l of linhas) ins.run(l);
+            })(tabela);
+        }
+    } catch (e) {
+        console.error('Falha ao atualizar a tabela:', e.message);
+    }
+
     // (Re)calcula os pontos de todos os jogos encerrados — barato e corrige placares revisados.
     const encerrados = db.prepare(`
         SELECT * FROM jogos WHERE status = 'FINISHED' AND gols_casa IS NOT NULL AND gols_fora IS NOT NULL
@@ -201,4 +216,8 @@ export function semPalpite(jogoBase) {
         return n < jogosDia.length;
     });
     return { jogos: jogosDia.length, usuarios };
+}
+
+export function tabela() {
+    return db.prepare('SELECT * FROM tabela ORDER BY posicao').all();
 }

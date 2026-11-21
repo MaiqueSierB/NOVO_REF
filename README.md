@@ -12,6 +12,9 @@ Bolão por pontos do Brasileirão Série A. Os jogos e resultados vêm da [footb
 | `/meuspalpites [rodada]` | Seus palpites e pontos (só você vê) |
 | `/ranking [rodada]` | Ranking geral ou de uma rodada |
 | `/regras` | Pontuação |
+| `/tabela` | Classificação da Série A |
+| `/rodada [n]` | Jogos e resultados da rodada |
+| `/meutime time` | Aviso de gol e fim de jogo do seu time no privado — qualquer time brasileiro (Série A, B, Copa do Brasil, Libertadores, Sul-Americana) |
 | `/zap` | Gera o código para ligar seu WhatsApp (notas e bolão pelo grupo do Zap) |
 
 ## Pontuação (só Brasileirão Série A)

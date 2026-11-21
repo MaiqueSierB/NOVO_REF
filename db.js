@@ -6,6 +6,7 @@ import config from './config.js';
 fs.mkdirSync(path.dirname(path.resolve(config.dbPath)), { recursive: true });
 const db = new Database(config.dbPath);
 db.pragma('journal_mode = WAL');
+db.pragma('busy_timeout = 5000');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS jogos (
@@ -35,6 +36,40 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS estado (
     chave TEXT PRIMARY KEY,
     valor TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS tabela (
+    posicao   INTEGER PRIMARY KEY,
+    time      TEXT NOT NULL,
+    jogos     INTEGER, vitorias INTEGER, empates INTEGER, derrotas INTEGER,
+    gols_pro  INTEGER, gols_contra INTEGER, saldo INTEGER, pontos INTEGER,
+    atualizado TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Time do coração de cada pessoa (chave canônica, ex.: 'flamengo', 'atletico-mg')
+  CREATE TABLE IF NOT EXISTS times_favoritos (
+    discord_id TEXT PRIMARY KEY,
+    time_key   TEXT NOT NULL,
+    time_nome  TEXT NOT NULL
+  );
+
+  -- Placar ao vivo visto por último (para detectar gol e fim de jogo, inclusive após reinício)
+  CREATE TABLE IF NOT EXISTS ao_vivo (
+    event_id   TEXT PRIMARY KEY,
+    casa TEXT, fora TEXT, casa_key TEXT, fora_key TEXT,
+    gols_casa INTEGER, gols_fora INTEGER, estado TEXT,
+    atualizado TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Avisos gerados (gol, fim de jogo); o Discord e o Zap marcam o que já enviaram
+  CREATE TABLE IF NOT EXISTS eventos (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo       TEXT NOT NULL,          -- 'gol' | 'fim'
+    times      TEXT NOT NULL,          -- chaves dos times envolvidos, separadas por vírgula
+    texto      TEXT NOT NULL,
+    criado     TEXT NOT NULL DEFAULT (datetime('now')),
+    discord_ok INTEGER NOT NULL DEFAULT 0,
+    zap_ok     INTEGER NOT NULL DEFAULT 0
   );
 
   CREATE INDEX IF NOT EXISTS idx_jogos_rodada ON jogos(temporada, rodada);

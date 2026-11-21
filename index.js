@@ -8,6 +8,8 @@ import config from './config.js';
 import * as bolao from './bolao.js';
 import { textoRegras } from './pontos.js';
 import * as zap from './zap.js';
+import * as aovivo from './aovivo.js';
+import { identificarTime, listaTimes } from './times.js';
 
 const COR = 0x1f8b4c;
 const fuso = 'America/Sao_Paulo';
@@ -33,6 +35,11 @@ const comandos = [
     new SlashCommandBuilder().setName('ranking').setDescription('Ranking do bolão (geral ou de uma rodada).')
         .addIntegerOption(o => o.setName('rodada').setDescription('Só uma rodada (deixe vazio para o geral)').setMinValue(1).setMaxValue(38)),
     new SlashCommandBuilder().setName('regras').setDescription('Como funciona a pontuação do bolão.'),
+    new SlashCommandBuilder().setName('tabela').setDescription('Classificação do Brasileirão Série A.'),
+    new SlashCommandBuilder().setName('rodada').setDescription('Jogos e resultados de uma rodada do Brasileirão.')
+        .addIntegerOption(o => o.setName('numero').setDescription('Número da rodada (padrão: atual)').setMinValue(1).setMaxValue(38)),
+    new SlashCommandBuilder().setName('meutime').setDescription('Escolhe seu time para receber aviso de gol e fim de jogo.')
+        .addStringOption(o => o.setName('time').setDescription('Seu time (ou "nenhum" para parar os avisos)').setRequired(true).setAutocomplete(true)),
     new SlashCommandBuilder().setName('zap').setDescription('Gera um código para ligar seu WhatsApp ao Discord (notas e bolão pelo Zap).')
 ].map(c => c.toJSON());
 
@@ -81,6 +88,16 @@ function embedRanking(rodada = null) {
         lista.map((r, i) => `${medalha(i)} <@${r.user_id}> — **${r.pontos} pts** · ${r.exatos} na mosca · ${r.jogos} jogos`).join('\n'));
 }
 
+function embedTabela() {
+    const t = bolao.tabela();
+    if (!t.length) return new EmbedBuilder().setColor(COR).setDescription('Ainda não carreguei a tabela. Tente em alguns minutos.');
+    const pad = (v, n) => String(v).padStart(n);
+    const linhas = t.map(l => `${pad(l.posicao, 2)} ${l.time.slice(0, 14).padEnd(14)} ${pad(l.pontos, 3)} ${pad(l.jogos, 3)} ${pad(l.vitorias, 3)} ${pad((l.saldo > 0 ? '+' : '') + l.saldo, 4)}`);
+    return new EmbedBuilder().setColor(COR).setTitle('🏆 Brasileirão Série A — Classificação')
+        .setDescription('```\n # Time             P   J   V   SG\n' + linhas.join('\n') + '\n```')
+        .setFooter({ text: 'Atualiza a cada 10 minutos' });
+}
+
 function menuJogosAbertos() {
     const jogos = bolao.jogosAbertos(25);
     if (!jogos.length) return null;
@@ -124,6 +141,14 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 client.on(Events.InteractionCreate, async interaction => {
     try {
+        if (interaction.isAutocomplete() && interaction.commandName === 'meutime') {
+            const t = interaction.options.getFocused().toLowerCase();
+            const opcoes = [{ key: 'nenhum', nome: 'Nenhum (parar avisos)' }, ...listaTimes()]
+                .filter(x => x.nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(t.normalize('NFD').replace(/[\u0300-\u036f]/g, '')))
+                .slice(0, 25);
+            return interaction.respond(opcoes.map(x => ({ name: x.nome, value: x.key })));
+        }
+
         if (interaction.isAutocomplete() && interaction.commandName === 'palpite') {
             const texto = interaction.options.getFocused();
             return interaction.respond(bolao.jogosAbertos(25, texto).map(j => ({
@@ -162,6 +187,24 @@ client.on(Events.InteractionCreate, async interaction => {
                     return interaction.reply({ ...efemero, content:
                         `📱 Mande no grupo do Regresso no WhatsApp:\n\n**!vincular ${codigo}**\n\nO código vale 10 minutos. ` +
                         `Depois disso, suas notas de filmes/jogos e palpites pelo Zap contam no seu perfil do Discord.${ja}` });
+                }
+                case 'tabela':
+                    return interaction.reply({ embeds: [embedTabela()] });
+                case 'rodada': {
+                    const rodada = interaction.options.getInteger('numero') ?? bolao.rodadaAtual();
+                    if (rodada == null) return interaction.reply({ ...efemero, content: 'Ainda não carreguei os jogos.' });
+                    return interaction.reply({ embeds: [embedRodada(rodada, interaction.user.id)] });
+                }
+                case 'meutime': {
+                    const escolha = interaction.options.getString('time');
+                    if (/^nenhum$/i.test(escolha)) {
+                        aovivo.removerTime(interaction.user.id);
+                        return interaction.reply({ ...efemero, content: '🔕 Pronto, você não recebe mais avisos de gol.' });
+                    }
+                    const time = listaTimes().find(t => t.key === escolha) || identificarTime(escolha);
+                    if (!time) return interaction.reply({ ...efemero, content: 'Não reconheci esse time. Escolha um da lista.' });
+                    aovivo.definirTime(interaction.user.id, time);
+                    return interaction.reply({ ...efemero, content: `✅ Time do coração: **${time.nome}**. Você vai receber no privado os gols e o fim dos jogos dele (e, se vinculou o Zap, vai ser marcado no grupo).` });
                 }
                 case 'regras':
                     return interaction.reply({ embeds: [new EmbedBuilder().setColor(COR).setTitle('📜 Regras do bolão').setDescription(textoRegras)] });
@@ -250,6 +293,27 @@ async function ciclo() {
     }
 }
 
+// Placar ao vivo: gera avisos de gol/fim e manda no privado de quem torce para os times do jogo.
+let aoVivoRodando = false;
+async function cicloAoVivo() {
+    if (aoVivoRodando) return;
+    aoVivoRodando = true;
+    try {
+        await aovivo.checarAoVivo();
+        for (const ev of aovivo.eventosPendentesDiscord()) {
+            for (const t of aovivo.torcedores(ev.times)) {
+                const user = await client.users.fetch(t.discord_id).catch(() => null);
+                await user?.send(ev.texto.replace(/\*/g, '**')).catch(() => {});
+            }
+            aovivo.marcarDiscord(ev.id);
+        }
+    } catch (e) {
+        console.error('Falha no placar ao vivo:', e.message);
+    } finally {
+        aoVivoRodando = false;
+    }
+}
+
 client.once(Events.ClientReady, async c => {
     console.log(`⚽ Bolão online como ${c.user.tag}`);
     try {
@@ -261,6 +325,7 @@ client.once(Events.ClientReady, async c => {
     }
     await ciclo();
     setInterval(ciclo, config.syncMinutos * 60_000);
+    setInterval(cicloAoVivo, 60_000);
 });
 
 // Servidor HTTP mínimo: a hospedagem precisa de uma porta respondendo.

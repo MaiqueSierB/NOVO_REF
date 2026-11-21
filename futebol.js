@@ -26,3 +26,20 @@ export async function buscarPartidas() {
         gols_fora: m.score?.fullTime?.away ?? null
     }));
 }
+
+// Classificação (o plano gratuito inclui tabelas)
+export async function buscarTabela() {
+    if (!config.footballDataKey) throw new Error('FOOTBALL_DATA_KEY não configurada');
+    const res = await fetch(`${BASE}/competitions/${config.competicao}/standings`, {
+        headers: { 'X-Auth-Token': config.footballDataKey }
+    });
+    if (!res.ok) throw new Error(`football-data.org (tabela) respondeu ${res.status}`);
+    const data = await res.json();
+    const total = (data.standings || []).find(s => s.type === 'TOTAL') || data.standings?.[0];
+    return (total?.table || []).map(l => ({
+        posicao: l.position,
+        time: l.team?.shortName || l.team?.name || '?',
+        jogos: l.playedGames, vitorias: l.won, empates: l.draw, derrotas: l.lost,
+        gols_pro: l.goalsFor, gols_contra: l.goalsAgainst, saldo: l.goalDifference, pontos: l.points
+    }));
+}
