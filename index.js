@@ -36,9 +36,14 @@ const comandos = [
 
 async function registrarComandos() {
     const rest = new REST({ version: '10' }).setToken(config.token);
+    // Usa o ID da aplicação do próprio token (evita CLIENT_ID trocado no .env)
+    const appId = client.application?.id ?? config.clientId;
+    if (config.clientId && config.clientId !== appId) {
+        console.warn(`CLIENT_ID do .env (${config.clientId}) não é deste bot; usando ${appId}.`);
+    }
     const rota = config.guildId
-        ? Routes.applicationGuildCommands(config.clientId, config.guildId)
-        : Routes.applicationCommands(config.clientId);
+        ? Routes.applicationGuildCommands(appId, config.guildId)
+        : Routes.applicationCommands(appId);
     // Proteção: se o token for de outro bot (com comandos que não são do bolão), não sobrescreve nada.
     const existentes = await rest.get(rota);
     const nossos = new Set(comandos.map(c => c.name));
