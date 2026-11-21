@@ -325,7 +325,7 @@ client.once(Events.ClientReady, async c => {
     }
     await ciclo();
     setInterval(ciclo, config.syncMinutos * 60_000);
-    setInterval(cicloAoVivo, 60_000);
+    setInterval(cicloAoVivo, 30_000);
     // Mantém os outros bots acordados: a Hostinger só (re)sobe alguns apps quando recebem visita.
     const URLS = (process.env.KEEPALIVE_URLS || 'https://antijanja.mrbnexus.com.br/health,https://rmdb.mrbnexus.com.br/,' +
         'https://rgdb.mrbnexus.com.br/,https://zap.mrbnexus.com.br/,https://aniversario.mrbnexus.com.br/').split(',');
