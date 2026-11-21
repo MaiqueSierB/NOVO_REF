@@ -44,7 +44,10 @@ const comandos = [
     new SlashCommandBuilder().setName('meutime').setDescription('Escolhe seu time para receber aviso de gol e fim de jogo.')
         .addStringOption(o => o.setName('time').setDescription('Seu time (ou "nenhum" para parar os avisos)').setRequired(true).setAutocomplete(true)),
     new SlashCommandBuilder().setName('status').setDescription('Mostra se os bots do Regresso estão no ar.'),
-    new SlashCommandBuilder().setName('zap').setDescription('Gera um código para ligar seu WhatsApp ao Discord (notas e bolão pelo Zap).')
+    new SlashCommandBuilder().setName('zap').setDescription('Gera um código para ligar seu WhatsApp ao Discord (notas e bolão pelo Zap).'),
+    new SlashCommandBuilder().setName('wrapped').setDescription('Regresso Wrapped: a retrospectiva do ano (sua ou de outra pessoa).')
+        .addUserOption(o => o.setName('pessoa').setDescription('De quem (padrão: você)'))
+        .addBooleanOption(o => o.setName('grupo').setDescription('Mostrar a do grupo inteiro'))
 ].map(c => c.toJSON());
 
 async function registrarComandos() {
@@ -221,6 +224,21 @@ client.on(Events.InteractionCreate, async interaction => {
                     if (!time) return interaction.reply({ ...efemero, content: 'Não reconheci esse time. Escolha um da lista.' });
                     aovivo.definirTime(interaction.user.id, time);
                     return interaction.reply({ ...efemero, content: `✅ Time do coração: **${time.nome}**. Você vai receber no privado os gols e o fim dos jogos dele (e, se vinculou o Zap, vai ser marcado no grupo).` });
+                }
+                case 'wrapped': {
+                    // As páginas e imagens são servidas pelo app do Zap, que lê todos os bancos
+                    const base = process.env.WRAPPED_URL || 'https://zap.mrbnexus.com.br';
+                    const v = new Date().toISOString().slice(0, 13);   // muda a cada hora: o Discord não reaproveita imagem velha
+                    if (interaction.options.getBoolean('grupo')) {
+                        return interaction.reply({ embeds: [new EmbedBuilder().setColor(COR).setTitle('🎁 Regresso Wrapped — o grupo')
+                            .setURL(`${base}/wrapped`).setDescription(`[Abrir a retrospectiva completa](${base}/wrapped)`)
+                            .setImage(`${base}/wrapped/grupo.png?v=${v}`)] });
+                    }
+                    const u = interaction.options.getUser('pessoa') ?? interaction.user;
+                    return interaction.reply({ embeds: [new EmbedBuilder().setColor(COR).setTitle(`🎁 Regresso Wrapped — ${u.displayName ?? u.username}`)
+                        .setURL(`${base}/wrapped/${u.id}`)
+                        .setDescription(`[Abrir a retrospectiva completa](${base}/wrapped/${u.id}) · [do grupo](${base}/wrapped)`)
+                        .setImage(`${base}/wrapped/${u.id}.png?v=${v}`)] });
                 }
                 case 'status':
                     return interaction.reply({ embeds: [new EmbedBuilder().setColor(COR).setTitle('🤖 Status dos bots')
