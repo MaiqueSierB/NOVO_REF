@@ -1,6 +1,6 @@
 import db, { getEstado, setEstado } from './db.js';
 import { buscarPartidas } from './futebol.js';
-import { calcularPontos } from './pontos.js';
+import { calcularPontos, REGRAS } from './pontos.js';
 
 const ABERTOS = ['SCHEDULED', 'TIMED'];
 const agoraISO = () => new Date().toISOString();
@@ -81,7 +81,7 @@ export function ranking(rodada = null, limite = 15) {
     return db.prepare(`
         SELECT p.user_id, MAX(p.username) AS username,
                COALESCE(SUM(p.pontos), 0) AS pontos,
-               SUM(CASE WHEN p.pontos = 10 THEN 1 ELSE 0 END) AS exatos,
+               SUM(CASE WHEN p.pontos = ${REGRAS.exato} THEN 1 ELSE 0 END) AS exatos,
                COUNT(p.pontos) AS jogos
         FROM palpites p JOIN jogos j ON j.id = p.jogo_id
         WHERE j.temporada = ? ${filtroRodada}

@@ -14,12 +14,16 @@ Bolão por pontos do Brasileirão Série A. Os jogos e resultados vêm da [footb
 | `/regras` | Pontuação |
 | `/zap` | Gera o código para ligar seu WhatsApp (notas e bolão pelo grupo do Zap) |
 
-## Pontuação
+## Pontuação (só Brasileirão Série A)
 
-- 🎯 Placar exato: **10**
-- ✅ Vencedor + saldo de gols: **7**
-- 👍 Só o resultado (vitória ou empate): **5**
-- ❌ Errou: **0**
+- 🎯 Placar exato: **25**
+- 🥅 Vencedor + gols de quem venceu: **18** (palpite 2x0, deu 2x1)
+- ⚖️ Vencedor + saldo de gols: **15** (palpite 2x1, deu 3x2) — empate com outro placar também vale 15
+- 🧤 Vencedor + gols de quem perdeu: **12** (palpite 2x1, deu 3x1)
+- 👍 Só o vencedor: **10**
+- ❌ Errou o resultado: **0**
+
+Desempate: mais placares exatos. O ranking é por temporada.
 
 Palpites podem ser feitos ou alterados até o apito inicial.
 
