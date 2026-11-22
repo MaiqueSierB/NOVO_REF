@@ -65,6 +65,8 @@ const salvar = db.prepare(`
         estado = excluded.estado, atualizado = excluded.atualizado
 `);
 
+const temTorcedor = db.prepare('SELECT 1 FROM times_favoritos WHERE time_key IN (?, ?) LIMIT 1');
+
 // Compara com o último estado salvo e gera os avisos.
 function processar(eventos) {
     const novos = [];
@@ -72,7 +74,8 @@ function processar(eventos) {
         const antes = db.prepare('SELECT * FROM ao_vivo WHERE event_id = ?').get(e.id);
         const times = [e.casaKey, e.foraKey].filter(Boolean).join(',');
         const placar = `${e.casa} ${e.golsCasa} x ${e.golsFora} ${e.fora}`;
-        if (antes && times) {
+        // Só avisa jogo de time que alguém da galera escolheu como time do coração (/meutime ou !meutime)
+        if (antes && times && temTorcedor.get(e.casaKey ?? '', e.foraKey ?? '')) {
             // Gols novos (pode ter mais de um entre duas checagens)
             const lados = [['casa', e.golsCasa - antes.gols_casa, e.casa, e.casaId], ['fora', e.golsFora - antes.gols_fora, e.fora, e.foraId]];
             for (const [, qtd, time, teamId] of lados) {
