@@ -65,6 +65,13 @@ const salvar = db.prepare(`
         estado = excluded.estado, atualizado = excluded.atualizado
 `);
 
+// Busca no YouTube pelos melhores momentos do jogo (com a data, para não pegar jogo antigo).
+// Só um link: o vídeo em si é das emissoras e clubes, o bot não baixa nem reposta.
+function linkMelhoresMomentos(casa, fora, quando = new Date()) {
+    const data = quando.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    return `https://www.youtube.com/results?search_query=${encodeURIComponent(`melhores momentos ${casa} x ${fora} ${data}`)}`;
+}
+
 // Compara com o último estado salvo e gera os avisos.
 function processar(eventos) {
     const novos = [];
@@ -89,7 +96,7 @@ function processar(eventos) {
                 inserirEvento.run('gol', times, texto); novos.push(texto);
             }
             if (e.estado === 'post' && antes.estado !== 'post') {
-                const texto = `🏁 *Fim de jogo:* ${placar}`;
+                const texto = `🏁 *Fim de jogo:* ${placar}\n🎥 Melhores momentos (os vídeos oficiais costumam sair até 1h depois):\n${linkMelhoresMomentos(e.casa, e.fora)}`;
                 inserirEvento.run('fim', times, texto); novos.push(texto);
             }
         }
