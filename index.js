@@ -43,6 +43,7 @@ const comandos = [
         .addIntegerOption(o => o.setName('numero').setDescription('Número da rodada (padrão: atual)').setMinValue(1).setMaxValue(38)),
     new SlashCommandBuilder().setName('meutime').setDescription('Escolhe seu time para receber aviso de gol e fim de jogo.')
         .addStringOption(o => o.setName('time').setDescription('Seu time (ou "nenhum" para parar os avisos)').setRequired(true).setAutocomplete(true)),
+    new SlashCommandBuilder().setName('torcidas').setDescription('Quem já escolheu o time do coração (e recebe aviso de gol).'),
     new SlashCommandBuilder().setName('status').setDescription('Mostra se os bots do Regresso estão no ar.'),
     new SlashCommandBuilder().setName('zap').setDescription('Gera um código para ligar seu WhatsApp ao Discord (notas e bolão pelo Zap).'),
     new SlashCommandBuilder().setName('wrapped').setDescription('Regresso Wrapped: a retrospectiva do ano (sua ou de outra pessoa).')
@@ -226,6 +227,22 @@ client.on(Events.InteractionCreate, async interaction => {
                     if (!time) return interaction.reply({ ...efemero, content: 'Não reconheci esse time. Escolha um da lista.' });
                     aovivo.definirTime(interaction.user.id, time);
                     return interaction.reply({ ...efemero, content: `✅ Time do coração: **${time.nome}**. Você vai receber no privado os gols e o fim dos jogos dele (e, se vinculou o Zap, vai ser marcado no grupo).` });
+                }
+                case 'torcidas': {
+                    const lista = db.prepare('SELECT discord_id, time_nome FROM times_favoritos ORDER BY time_nome').all();
+                    if (!lista.length) {
+                        return interaction.reply('Ninguém escolheu time ainda. Use `/meutime` (ou `!meutime` no Zap) pra receber aviso de gol do seu time.');
+                    }
+                    const porTime = new Map();
+                    for (const r of lista) porTime.set(r.time_nome, [...(porTime.get(r.time_nome) ?? []), `<@${r.discord_id}>`]);
+                    const linhas = [...porTime].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+                        .map(([time, gente]) => `**${time}** (${gente.length}): ${gente.join(', ')}`);
+                    return interaction.reply({
+                        embeds: [new EmbedBuilder().setColor(COR).setTitle(`⚽ Torcidas do Regresso — ${lista.length} pessoa(s)`)
+                            .setDescription(linhas.join('\n').slice(0, 4000))
+                            .setFooter({ text: 'Só jogos desses times geram aviso de gol. Escolha o seu com /meutime.' })],
+                        allowedMentions: { parse: [] }
+                    });
                 }
                 case 'wrapped': {
                     // As páginas e imagens são servidas pelo app do Zap, que lê todos os bancos
