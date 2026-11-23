@@ -11,6 +11,7 @@ import { textoRegras } from './pontos.js';
 import * as zap from './zap.js';
 import * as aovivo from './aovivo.js';
 import { rodarMonitor, textoStatus } from './monitor.js';
+import { paginaStatus, dadosStatus } from './status.js';
 import { identificarTime, listaTimes } from './times.js';
 
 const COR = 0x1f8b4c;
@@ -392,13 +393,27 @@ client.once(Events.ClientReady, async c => {
     setInterval(ciclo, config.syncMinutos * 60_000);
     setInterval(cicloAoVivo, 30_000);
     // Monitor: visita os outros bots a cada 5 min (mantém acordados) e avisa o admin se algum cair.
-    const monitorar = () => rodarMonitor(avisarAdmin).catch(e => console.error('Monitor:', e.message));
+    const monitorar = () => rodarMonitor(avisarAdmin, { ok: client.isReady(), detalhe: client.user?.tag ?? 'desconectado' })
+        .catch(e => console.error('Monitor:', e.message));
     monitorar();
     setInterval(monitorar, 5 * 60_000);
 });
 
 // Servidor HTTP mínimo: a hospedagem precisa de uma porta respondendo.
 http.createServer((req, res) => {
+    // Página de status pública (bolao.mrbnexus.com.br/status) e os mesmos dados em JSON
+    const caminho = req.url.split('?')[0].replace(/\/$/, '');
+    if (caminho === '/status' || caminho === '/status.json') {
+        try {
+            const json = caminho.endsWith('.json');
+            res.writeHead(200, { 'Content-Type': json ? 'application/json; charset=utf-8' : 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=60' });
+            return res.end(json ? JSON.stringify(dadosStatus()) : paginaStatus());
+        } catch (e) {
+            console.error('Página de status:', e.message);
+            res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+            return res.end('Erro ao montar a página de status.');
+        }
+    }
     const ok = client.isReady();
     res.writeHead(ok ? 200 : 503, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok, bot: client.user?.tag ?? null, rodada: ok ? bolao.rodadaAtual() : null }));

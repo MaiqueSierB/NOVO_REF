@@ -1,5 +1,21 @@
 // Monitor dos bots: visita cada um a cada 5 minutos (isso também os mantém acordados na Hostinger),
 // guarda o último estado e avisa no privado do admin quando um cai ou volta.
+// Cada checagem fica gravada (30 dias) para a página de status (status.js).
+import db from './db.js';
+
+db.exec(`CREATE TABLE IF NOT EXISTS monitor (
+    bot   TEXT NOT NULL,
+    slot  INTEGER NOT NULL,          -- janela de 5 min (epoch / 300000): uma linha por bot por janela, mesmo com 2 processos
+    ok    INTEGER NOT NULL,          -- 1 no ar, 2 no ar com aviso (ex.: Zap esperando pareamento), 0 fora
+    ms    INTEGER,
+    detalhe TEXT,
+    PRIMARY KEY (bot, slot)
+)`);
+const gravar = db.prepare('INSERT OR IGNORE INTO monitor (bot, slot, ok, ms, detalhe) VALUES (?, ?, ?, ?, ?)');
+const limpar = db.prepare('DELETE FROM monitor WHERE slot < ?');
+export const SLOT_MS = 5 * 60_000;
+// "No ar, mas com aviso": o app responde, mas está pausado ou sem o WhatsApp conectado
+const comAviso = detalhe => /pausado|aguardando|pareamento/i.test(detalhe ?? '');
 const BOTS = (process.env.MONITOR_BOTS ||
     'Anti Janja=https://antijanja.mrbnexus.com.br/health,RMDB=https://rmdb.mrbnexus.com.br/,' +
     'RGDB=https://rgdb.mrbnexus.com.br/,Zap=https://zap.mrbnexus.com.br/,Aniversários=https://aniversario.mrbnexus.com.br/')
@@ -19,9 +35,14 @@ async function checar(bot) {
     }
 }
 
-export async function rodarMonitor(avisar) {
+export async function rodarMonitor(avisar, proprio) {
+    const slot = Math.floor(Date.now() / SLOT_MS);
+    // O próprio bolão também entra na página de status
+    if (proprio) gravar.run('Bolão', slot, proprio.ok ? 1 : 0, 0, proprio.detalhe);
+    limpar.run(slot - (30 * 86_400_000) / SLOT_MS);
     await Promise.all(BOTS.map(async bot => {
         const r = await checar(bot);
+        gravar.run(bot.nome, slot, r.ok ? (comAviso(r.detalhe) ? 2 : 1) : 0, r.ms, String(r.detalhe ?? '').slice(0, 200));
         const antes = estado.get(bot.nome) || { ok: true, falhas: 0, desde: Date.now(), alertado: false };
         const agora = { ...antes, ms: r.ms, detalhe: r.detalhe };
         if (r.ok) {
@@ -38,6 +59,8 @@ export async function rodarMonitor(avisar) {
         estado.set(bot.nome, agora);
     }));
 }
+
+export const nomesBots = () => ['Bolão', ...BOTS.map(b => b.nome)];
 
 export function textoStatus() {
     if (!estado.size) return 'Ainda não fiz a primeira checagem. Tenta em 1 minuto.';
