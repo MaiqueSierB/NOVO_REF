@@ -4,6 +4,24 @@ import db from './db.js';
 import { SLOT_MS, nomesBots } from './monitor.js';
 
 const DIA = 86_400_000;
+
+// Quedas de antes da página existir, tiradas dos logs da Hostinger (gravadas uma vez só)
+// (ok 1 = conectado no período, 0 = fora)
+const QUEDAS_DOS_LOGS = [
+    { bot: 'Zap', de: '2026-11-21T03:00:00Z', ate: '2026-11-21T14:50:00Z', ok: 1, detalhe: 'conectado (pelos logs)' },
+    { bot: 'Zap', de: '2026-11-21T14:50:00Z', ate: '2026-11-21T21:27:00Z', ok: 0, detalhe: 'WhatsApp restringiu o número; bot pausado até parear de novo' },
+    { bot: 'Zap', de: '2026-11-21T21:27:00Z', ate: '2026-11-23T19:20:00Z', ok: 1, detalhe: 'conectado (pelos logs)' },
+    { bot: 'Zap', de: '2026-11-23T19:20:00Z', ate: '2026-11-23T20:05:00Z', ok: 0, detalhe: 'sessão encerrada pelo WhatsApp (logout)' }
+];
+if (!db.prepare("SELECT valor FROM estado WHERE chave = 'status_logs_importados'").get()) {
+    const ins = db.prepare('INSERT OR IGNORE INTO monitor (bot, slot, ok, ms, detalhe) VALUES (?, ?, ?, NULL, ?)');
+    db.transaction(() => {
+        for (const q of QUEDAS_DOS_LOGS) {
+            for (let slot = Math.floor(Date.parse(q.de) / SLOT_MS); slot < Math.floor(Date.parse(q.ate) / SLOT_MS); slot++) ins.run(q.bot, slot, q.ok, q.detalhe);
+        }
+        db.prepare("INSERT OR REPLACE INTO estado (chave, valor) VALUES ('status_logs_importados', '1')").run();
+    })();
+}
 const POR_DIA = DIA / SLOT_MS;            // 288 checagens por dia
 
 // Considera no ar quem respondeu (ok 1 ou 2)
@@ -27,7 +45,7 @@ function quedas(bot, desdeSlot) {
             atual = null;
         }
     }
-    if (atual && atual.n >= 2) lista.push({ ...atual, emAndamento: true });
+    if (atual) lista.push({ ...atual, emAndamento: true });   // queda acontecendo agora aparece já na 1ª checagem
     return lista;
 }
 
@@ -65,7 +83,8 @@ export function dadosStatus() {
             inicio: new Date(q.inicio * SLOT_MS).toISOString(),
             minutos: (q.fim - q.inicio + 1) * 5
         }));
-    return { atualizado: new Date().toISOString(), bots, incidentes };
+    const inicio = db.prepare('SELECT MIN(slot) AS s FROM monitor WHERE ms IS NOT NULL').get()?.s;
+    return { atualizado: new Date().toISOString(), inicioMonitor: inicio ? new Date(inicio * SLOT_MS).toISOString() : null, bots, incidentes };
 }
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -94,7 +113,7 @@ export function paginaStatus() {
     const incidentes = d.incidentes.length
         ? `<ul class="inc">${d.incidentes.map(i => `<li><b>${esc(i.bot)}</b> ${i.emAndamento ? '<span class="tag">agora</span>' : ''}
             <span>${quando(i.inicio)} · ${i.emAndamento ? 'há' : 'durou'} ${duracao(i.minutos)}</span><small>${esc(i.motivo)}</small></li>`).join('')}</ul>`
-        : '<p class="vazio">Nenhuma queda nos últimos 30 dias. 🎉</p>';
+        : `<p class="vazio">Nenhuma queda registrada${d.inicioMonitor ? ` desde ${quando(d.inicioMonitor)}` : ''}.</p>`;
 
     return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Status dos bots do Regresso</title><meta http-equiv="refresh" content="60">
@@ -117,6 +136,6 @@ h3{margin:28px 0 12px;font-size:18px}.inc{list-style:none;padding:0}.inc li{back
 <div class="geral ${geral[0]}">${esc(geral[1])}</div>
 ${linhas}
 <h3>Quedas recentes</h3>${incidentes}
-<footer>Quedas de menos de 10 minutos (reinícios) não contam como incidente · <a href="/status.json" style="color:inherit">JSON</a></footer>
+<footer>${d.inicioMonitor ? `Monitoramento automático desde ${quando(d.inicioMonitor)}; quedas anteriores vêm dos logs da hospedagem. ` : ''}Quedas de menos de 10 minutos (reinícios) não contam · <a href="/status.json" style="color:inherit">JSON</a></footer>
 </main></body></html>`;
 }
