@@ -5,6 +5,7 @@ import {
     ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags
 } from 'discord.js';
 import config from './config.js';
+import db from './db.js';
 import * as bolao from './bolao.js';
 import { textoRegras } from './pontos.js';
 import * as zap from './zap.js';
