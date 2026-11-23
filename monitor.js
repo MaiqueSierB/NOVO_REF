@@ -18,7 +18,8 @@ export const SLOT_MS = 5 * 60_000;
 const comAviso = detalhe => /pausado|aguardando|pareamento/i.test(detalhe ?? '');
 const BOTS = (process.env.MONITOR_BOTS ||
     'Anti Janja=https://antijanja.mrbnexus.com.br/health,RMDB=https://rmdb.mrbnexus.com.br/,' +
-    'RGDB=https://rgdb.mrbnexus.com.br/,Zap=https://zap.mrbnexus.com.br/,Aniversários=https://aniversario.mrbnexus.com.br/')
+    'RGDB=https://rgdb.mrbnexus.com.br/,Zap=https://zap.mrbnexus.com.br/,Aniversários=https://aniversario.mrbnexus.com.br/,' +
+    'Portal=https://regresso.mrbnexus.com.br/health')
     .split(',').map(par => { const [nome, url] = par.split('='); return { nome: nome.trim(), url: url.trim() }; });
 
 const FALHAS_PARA_ALERTA = 3;   // 3 checagens seguidas (~15 min) antes de avisar, para não alarmar em reinício
