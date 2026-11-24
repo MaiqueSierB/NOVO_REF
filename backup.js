@@ -17,7 +17,8 @@ export const BANCOS = {
     'bolao.sqlite': process.env.BOLAO_DB || `${BASE}/bolao-data/bolao.sqlite`,
     'aniversario.sqlite': process.env.ANIV_DB || `${BASE}/aniversario-data/servidor.sqlite`,
     'zap.sqlite': process.env.ZAP_DB || `${BASE}/zap-data/zap.sqlite`,
-    'antijanja-resenha.sqlite': process.env.RESENHA_DB || `${BASE}/antijanja-data/resenha.sqlite`
+    'antijanja-resenha.sqlite': process.env.RESENHA_DB || `${BASE}/antijanja-data/resenha.sqlite`,
+    'gym.sqlite': process.env.GYM_DB || `${BASE}/gym-data/gym.sqlite`
 };
 
 const hoje = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });   // AAAA-MM-DD
@@ -48,11 +49,33 @@ export function fazerBackup(dia = hoje()) {
             banco?.close();
         }
     }
+    // Fotos do Gym Rats: espelho único em backups/gym-fotos (só copia as novas, nunca apaga)
+    try {
+        const n = espelharFotos();
+        if (n) feitos.push(`${n} foto${n > 1 ? 's' : ''} nova${n > 1 ? 's' : ''} do Gym Rats`);
+    } catch (e) {
+        falhas.push(`fotos do Gym Rats: ${e.message}`);
+    }
     // Só troca a pasta do dia quando a cópia terminou (nunca fica um backup pela metade com nome de pronto)
     fs.rmSync(destino, { recursive: true, force: true });
     fs.renameSync(temp, destino);
     limparAntigos();
     return { dia, feitos, falhas };
+}
+
+const FOTOS_GYM = process.env.GYM_FOTOS || `${BASE}/gym-data/fotos`;
+function espelharFotos() {
+    if (!fs.existsSync(FOTOS_GYM)) return 0;
+    const destino = path.join(PASTA, 'gym-fotos');
+    fs.mkdirSync(destino, { recursive: true });
+    let novas = 0;
+    for (const f of fs.readdirSync(FOTOS_GYM)) {
+        if (!f.endsWith('.jpg') || fs.existsSync(path.join(destino, f))) continue;
+        fs.copyFileSync(path.join(FOTOS_GYM, f), path.join(destino, `${f}.parcial`));
+        fs.renameSync(path.join(destino, `${f}.parcial`), path.join(destino, f));
+        novas++;
+    }
+    return novas;
 }
 
 function limparAntigos() {
