@@ -12,6 +12,7 @@ import * as zap from './zap.js';
 import * as aovivo from './aovivo.js';
 import { rodarMonitor, textoStatus } from './monitor.js';
 import { paginaStatus, dadosStatus } from './status.js';
+import { verificarBackup, listarBackups } from './backup.js';
 import { identificarTime, listaTimes } from './times.js';
 
 const COR = 0x1f8b4c;
@@ -263,7 +264,8 @@ client.on(Events.InteractionCreate, async interaction => {
                 }
                 case 'status':
                     return interaction.reply({ embeds: [new EmbedBuilder().setColor(COR).setTitle('🤖 Status dos bots')
-                        .setDescription(`🟢 **Bolão** — ${client.user.tag} (este bot)\n${textoStatus()}`).setFooter({ text: 'Checagem a cada 5 minutos' })] });
+                        .setDescription(`🟢 **Bolão** — ${client.user.tag} (este bot)\n${textoStatus()}`)
+                        .setFooter({ text: `Checagem a cada 5 minutos · Último backup: ${listarBackups()[0]?.dia.split('-').reverse().join('/') ?? 'nenhum ainda'} (${listarBackups().length} guardados)` })] });
                 case 'regras':
                     return interaction.reply({ embeds: [new EmbedBuilder().setColor(COR).setTitle('📜 Regras do bolão').setDescription(textoRegras)] });
             }
@@ -397,6 +399,9 @@ client.once(Events.ClientReady, async c => {
         .catch(e => console.error('Monitor:', e.message));
     monitorar();
     setInterval(monitorar, 5 * 60_000);
+    // Backup diário dos bancos (por volta das 4h; checa de hora em hora)
+    verificarBackup(avisarAdmin);
+    setInterval(() => verificarBackup(avisarAdmin), 60 * 60_000);
 });
 
 // Servidor HTTP mínimo: a hospedagem precisa de uma porta respondendo.
