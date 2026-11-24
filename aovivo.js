@@ -102,6 +102,8 @@ function processar(eventos) {
     return novos;
 }
 
+const processarAtomico = db.transaction(processar);
+
 export async function checarAoVivo() {
     // Jogos de "hoje" pelo horário de Brasília em cada competição
     const listas = await Promise.all(LIGAS.map(l => buscar(l.trim(), `?dates=${dataBR()}`)));
@@ -109,7 +111,8 @@ export async function checarAoVivo() {
     for (const ev of listas.flat()) porId.set(String(ev.id), ev);
     db.prepare("DELETE FROM eventos WHERE criado < datetime('now', '-3 days')").run();
     db.prepare("DELETE FROM ao_vivo WHERE atualizado < datetime('now', '-5 days')").run();
-    return processar([...porId.values()].map(lerEvento));
+    // IMMEDIATE: se a Hostinger subir dois processos ao mesmo tempo, só um compara e grava o placar (sem gol duplicado)
+    return processarAtomico.immediate([...porId.values()].map(lerEvento));
 }
 
 // ---------- Times do coração ----------
@@ -133,6 +136,7 @@ export function eventosPendentesDiscord() {
     return db.prepare('SELECT * FROM eventos WHERE discord_ok = 0 ORDER BY id').all();
 }
 
+// Reserva o aviso antes de mandar: devolve false se outro processo já pegou (evita DM duplicada)
 export function marcarDiscord(id) {
-    db.prepare('UPDATE eventos SET discord_ok = 1 WHERE id = ?').run(id);
+    return db.prepare('UPDATE eventos SET discord_ok = 1 WHERE id = ? AND discord_ok = 0').run(id).changes > 0;
 }

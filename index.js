@@ -361,11 +361,11 @@ async function cicloAoVivo() {
     try {
         await aovivo.checarAoVivo();
         for (const ev of aovivo.eventosPendentesDiscord()) {
+            if (!aovivo.marcarDiscord(ev.id)) continue;
             for (const t of aovivo.torcedores(ev.times)) {
                 const user = await client.users.fetch(t.discord_id).catch(() => null);
                 await user?.send(ev.texto.replace(/\*/g, '**')).catch(() => {});
             }
-            aovivo.marcarDiscord(ev.id);
         }
     } catch (e) {
         console.error('Falha no placar ao vivo:', e.message);
